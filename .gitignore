@@ -12,9 +12,6 @@ venv/
 *.pkl
 *.joblib
 
-# Data files (optional - if large/private)
-data/
-*.csv
 
 # Environment variables
 .env
