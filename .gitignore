@@ -1,0 +1,34 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+
+# Model files (IMPORTANT - don't upload ML models)
+*.pkl
+*.joblib
+
+# Data files (optional - if large/private)
+data/
+*.csv
+
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# spaCy model cache
+.spacy_cache/

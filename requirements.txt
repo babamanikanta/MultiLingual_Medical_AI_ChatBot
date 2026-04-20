@@ -1,0 +1,22 @@
+# pandas
+# numpy
+# scikit-learn
+# joblib
+# pyTelegramBotAPI
+# python-dotenv
+# deep-translator
+# langdetect
+# pyTelegramBotAPI
+# sentence-transformers
+# torch
+# transformers
+# spacy
+
+pandas
+numpy
+scikit-learn
+joblib
+deep-translator
+spacy
+python-dotenv
+pyTelegramBotAPI
