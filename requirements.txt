@@ -20,3 +20,4 @@ deep-translator
 spacy
 python-dotenv
 pyTelegramBotAPI
+google-generativeai

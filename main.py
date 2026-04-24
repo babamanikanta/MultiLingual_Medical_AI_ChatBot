@@ -1,6 +1,11 @@
 import pandas as pd
 import joblib
 import re
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+load_dotenv()
 
 from utils.data_loader import get_disease_info
 from utils.translator import translate_to_user_lang, to_english
@@ -19,23 +24,46 @@ ALL_DISEASES = set(model.classes_)
 ALL_DISEASES_LOWER = {d.lower() for d in ALL_DISEASES}
 
 # ----------------------------
+# Configure Gemini API
+# ----------------------------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    try:
+        model_gemini = genai.GenerativeModel("gemini-2.5-flash")
+        # Test the API
+        test_response = model_gemini.generate_content("test")
+        print("✅ Gemini API is working with gemini-2.5-flash!")
+    except Exception as e:
+        print(f"⚠️ Gemini API not available: {e}")
+        model_gemini = None
+else:
+    model_gemini = None
+
+# ----------------------------
 # Disease Control
 # ----------------------------
 COMMON_DISEASES = {
-    "Common Cold", "Viral Fever", "Flu",
-    "Allergy", "Migraine", "Gastroenteritis"
+    "Common Cold",
+    "Viral Fever",
+    "Flu",
+    "Allergy",
+    "Migraine",
+    "Gastroenteritis",
 }
 
 SERIOUS_DISEASES = {
-    "AIDS", "Paralysis (brain hemorrhage)",
-    "Tuberculosis", "Cancer", "Heart attack"
+    "AIDS",
+    "Paralysis (brain hemorrhage)",
+    "Tuberculosis",
+    "Cancer",
+    "Heart attack",
 }
 
 # ----------------------------
 # SYMPTOM MAP (FINAL)
 # ----------------------------
 RAW_SYMPTOM_MAP = {
-
     # English
     "fever": "high_fever",
     "cough": "cough",
@@ -52,7 +80,6 @@ RAW_SYMPTOM_MAP = {
     "diarrhea": "diarrhoea",
     "diarrhoea": "diarrhoea",
     "loose motions": "diarrhoea",
-
     # Hindi
     "bukhar": "high_fever",
     "khansi": "cough",
@@ -62,21 +89,18 @@ RAW_SYMPTOM_MAP = {
     "pet mein dard": "stomach_pain",
     "ulti": "vomiting",
     "ulti ho rahi": "vomiting",
-
     # Telugu (roman)
     "jwaram": "high_fever",
     "daggu": "cough",
     "tala noppi": "headache",
     "kadupu noppi": "stomach_pain",
     "vanti": "vomiting",
-
     # Telugu (native)
     "జ్వరం": "high_fever",
     "దగ్గు": "cough",
     "తలనొప్పి": "headache",
     "కడుపు నొప్పి": "stomach_pain",
     "వాంతులు": "vomiting",
-
     # Runny nose (FIXED STRONG)
     "mukku karutundi": "runny_nose",
     "mukku nundi neeru vastundi": "runny_nose",
@@ -85,11 +109,9 @@ RAW_SYMPTOM_MAP = {
     "చెమిడి కారుతుంది": "runny_nose",
     "చెమిడి": "runny_nose",
     "ముక్కు కారుతుంది": "runny_nose",
-
     # Cold
     "jalubu": "continuous_sneezing",
     "జలుబు": "continuous_sneezing",
-
     # Diarrhoea Telugu
     "dayeriya": "diarrhoea",
     "డయేరియా": "diarrhoea",
@@ -97,12 +119,13 @@ RAW_SYMPTOM_MAP = {
 
 SYMPTOM_MAP = {k: v for k, v in RAW_SYMPTOM_MAP.items() if v in symptom_columns}
 
+
 # ----------------------------
 # NORMALIZATION
 # ----------------------------
 def normalize_input(text):
     text = text.lower()
-    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r"[^\w\s]", " ", text)
 
     symptoms = set()
 
@@ -131,6 +154,7 @@ def normalize_input(text):
 
     return list({s for s in symptoms if s in symptom_columns})
 
+
 # ----------------------------
 # RULE ENGINE
 # ----------------------------
@@ -158,11 +182,12 @@ def apply_medical_rules(symptoms):
 
     return []
 
+
 # ----------------------------
 # ML PREDICTION (SAFE)
 # ----------------------------
 def predict(symptoms_list):
-    input_data = pd.DataFrame([[0]*len(symptom_columns)], columns=symptom_columns)
+    input_data = pd.DataFrame([[0] * len(symptom_columns)], columns=symptom_columns)
 
     for s in symptoms_list:
         if s in symptom_columns:
@@ -190,12 +215,12 @@ def predict(symptoms_list):
             confidence += 10
 
         if confidence >= 20:
-            results.append({
-                "disease": disease,
-                "confidence": round(min(confidence, 100), 2)
-            })
+            results.append(
+                {"disease": disease, "confidence": round(min(confidence, 100), 2)}
+            )
 
     return sorted(results, key=lambda x: x["confidence"], reverse=True)[:3]
+
 
 # ----------------------------
 # DOCTOR RECOMMENDATION
@@ -217,55 +242,11 @@ def get_doctor_advice(symptoms, predictions):
 
     return "✅ Monitor symptoms. Consult a doctor if condition worsens."
 
+
 # ----------------------------
-# MAIN CHATBOT
+# Helper for original response
 # ----------------------------
-def run_chatbot(user_input):
-
-    # 🔥 STEP 1: TRANSLATE FIRST (VERY IMPORTANT FIX)
-    translated_text, lang = to_english(user_input)
-
-    # fallback safety
-    if not translated_text:
-        translated_text = user_input.lower()
-
-    # 🔥 STEP 2: normalize + extract symptoms on ENGLISH TEXT
-    symptoms = normalize_input(translated_text.lower())
-
-    print("🧾 Extracted Symptoms:", symptoms)
-
-    if not symptoms:
-        return translate_to_user_lang(
-            "Could not understand symptoms.",
-            lang
-        )
-
-    if len(symptoms) < 2:
-        return translate_to_user_lang(
-            "I understood limited symptoms. Please add more details like fever, pain, cough etc.",
-            lang
-        )
-
-    # 🔥 STEP 3: rule engine
-    rule = apply_medical_rules(symptoms)
-
-    if rule:
-        predictions = [
-            {"disease": d, "confidence": 70 - i * 5}
-            for i, d in enumerate(rule)
-        ]
-    else:
-        predictions = predict(symptoms)
-
-    if not predictions:
-        predictions = [{
-            "disease": "General Viral Infection",
-            "confidence": 40
-        }]
-
-    doctor_advice = get_doctor_advice(symptoms, predictions)
-
-    # 🔥 STEP 4: build response
+def build_original_response(predictions, doctor_advice, lang):
     response = ""
 
     for p in predictions:
@@ -299,8 +280,122 @@ def run_chatbot(user_input):
 {doctor_advice}
 """
 
-    # 🔥 STEP 5: translate back
     return translate_to_user_lang(response, lang)
+
+
+# ----------------------------
+# MAIN CHATBOT
+# ----------------------------
+def run_chatbot(user_input):
+
+    # 🔥 STEP 1: TRANSLATE
+    translated_text, lang = to_english(user_input)
+
+    if not translated_text:
+        translated_text = user_input.lower()
+
+    # 🔥 STEP 2: SYMPTOMS
+    symptoms = normalize_input(translated_text.lower())
+    print("🧾 Extracted Symptoms:", symptoms)
+
+    if not symptoms:
+        return translate_to_user_lang("Could not understand symptoms.", lang)
+
+    if len(symptoms) < 2:
+        return translate_to_user_lang(
+            "I understood limited symptoms. Please add more details like fever, pain, cough etc.",
+            lang,
+        )
+
+    # 🔥 STEP 3: RULE ENGINE
+    rule = apply_medical_rules(symptoms)
+
+    if rule:
+        predictions = [
+            {"disease": d, "confidence": 70 - i * 5} for i, d in enumerate(rule)
+        ]
+    else:
+        predictions = predict(symptoms)
+
+    if not predictions:
+        predictions = [{"disease": "General Viral Infection", "confidence": 40}]
+
+    doctor_advice = get_doctor_advice(symptoms, predictions)
+
+    # ✅ DEBUG LINE (VERY IMPORTANT)
+    print("DEBUG:", translated_text, symptoms, predictions)
+
+    # 🔥 STEP 4: Gemini
+    if model_gemini:
+        prompt = f"""
+You are a professional medical assistant.
+
+User input:
+"{translated_text}"
+
+Symptoms:
+{', '.join(symptoms)}
+
+Predicted diseases:
+{', '.join([f"{p['disease']} ({p['confidence']}%)" for p in predictions])}
+
+Doctor advice:
+{doctor_advice}
+
+IMPORTANT:
+- Keep response SHORT and structured
+- Do NOT add extra text
+- Follow format EXACTLY
+
+FORMAT:
+
+🦠 Disease: <name>
+📊 Confidence: <percent>
+
+🧾 Description:
+...
+
+💊 Medication:
+...
+
+🥗 Diet:
+...
+
+🛡️ Precautions:
+...
+
+🏃 Workout:
+...
+
+-------------------------
+
+🩺 Doctor Recommendation:
+...
+"""
+        try:
+            print("🔄 Calling Gemini API...")
+
+            gemini_response = model_gemini.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.4,
+                    "max_output_tokens": 400
+                }
+            ).text
+
+            print("✅ Gemini response received")
+
+            return translate_to_user_lang(gemini_response, lang)
+
+        except Exception as e:
+            print(f"❌ Gemini error: {type(e).__name__}: {e}")
+            return build_original_response(predictions, doctor_advice, lang)
+
+    else:
+        return build_original_response(predictions, doctor_advice, lang)
+
+    # ✅ CORRECT POSITION (inside function, aligned with if)
+    return response
 
 # ----------------------------
 # CLI
