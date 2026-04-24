@@ -9,33 +9,33 @@ def detect_language_custom(text):
     if not text:
         return "en"
 
-    text = text.lower().strip()
+    text_lower = text.lower()
 
-    # Telugu script
-    if re.search(r'[\u0C00-\u0C7F]', text):
+    # 1. Telugu script (strong signal)
+    if re.search(r'[\u0C00-\u0C7F]', text_lower):
         return "te"
 
-    # Hindi script
-    if re.search(r'[\u0900-\u097F]', text):
+    # 2. Hindi script (strong signal)
+    if re.search(r'[\u0900-\u097F]', text_lower):
         return "hi"
 
-    # Telugu roman keywords (expanded slightly)
-    telugu_words = [
-        "jwaram", "noppi", "talanoppi", "naku", "undi",
-        "durada", "mukku", "daggu", "vanta"
-    ]
+    # 3. Roman Telugu signals (VERY SIMPLE)
+    telugu_signals = ["maa", "naaku", "undi", "tala", "noppi", "vundi", "vundi"]
 
-    # Hindi roman keywords (expanded slightly)
-    hindi_words = [
-        "bukhar", "khansi", "dard", "hai", "pet", "sir"
-    ]
+    # 4. Roman Hindi signals (VERY GENERIC — no language knowledge needed)
+    hindi_signals = ["hai", "aur", "ki", "me", "se"]
 
-    words = text.split()
+    # scoring
+    telugu_score = sum(1 for w in telugu_signals if w in text_lower)
+    hindi_score = sum(1 for w in hindi_signals if w in text_lower)
 
-    if any(word in text for word in telugu_words):
+    # IMPORTANT RULE:
+    # If Telugu-style words exist → prefer Telugu
+    if telugu_score > 0:
         return "te"
 
-    if any(word in text for word in hindi_words):
+    # else if Hindi-style structure → Hindi
+    if hindi_score > 0:
         return "hi"
 
     return "en"

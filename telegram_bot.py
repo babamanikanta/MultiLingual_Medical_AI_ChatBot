@@ -3,7 +3,8 @@ import os
 import time
 from dotenv import load_dotenv
 
-from main import run_chatbot, normalize_input
+# ✅ UPDATED IMPORTS
+from main import run_chatbot, extract_all_symptoms
 from utils.db import save_user_query
 
 # ----------------------------
@@ -97,7 +98,7 @@ def handle_message(message):
         time.sleep(0.7)
 
         # ----------------------------
-        # AI response
+        # AI response (CORRECT PIPELINE)
         # ----------------------------
         response = run_chatbot(user_input)
 
@@ -110,7 +111,7 @@ def handle_message(message):
             )
 
         # ----------------------------
-        # Add Disclaimer at end
+        # Add Disclaimer
         # ----------------------------
         response += (
             "\n\n⚠️ Note:\n"
@@ -119,9 +120,13 @@ def handle_message(message):
         )
 
         # ----------------------------
-        # Extract symptoms
+        # ✅ FIXED SYMPTOM EXTRACTION
         # ----------------------------
-        symptoms = normalize_input(user_input)
+        symptoms = extract_all_symptoms(user_input)
+
+        # Debug (optional)
+        print("INPUT:", user_input)
+        print("SYMPTOMS:", symptoms)
 
         # ----------------------------
         # Save to DB
