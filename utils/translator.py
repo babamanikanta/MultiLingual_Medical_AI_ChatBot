@@ -11,31 +11,32 @@ def detect_language_custom(text):
 
     text_lower = text.lower()
 
-    # 1. Telugu script (strong signal)
+    # ----------------------------
+    # 1. Strong script detection
+    # ----------------------------
     if re.search(r'[\u0C00-\u0C7F]', text_lower):
         return "te"
 
-    # 2. Hindi script (strong signal)
     if re.search(r'[\u0900-\u097F]', text_lower):
         return "hi"
 
-    # 3. Roman Telugu signals (VERY SIMPLE)
-    telugu_signals = ["maa", "naaku", "undi", "tala", "noppi", "vundi", "vundi"]
+    # ----------------------------
+    # 2. Strong Hinglish detection
+    # ----------------------------
+    hindi_keywords = [
+        "hai", "hun", "ho", "tha", "thi", "the",
+        "mera", "meri", "mere",
+        "dost", "dosth",
+        "mujhe", "mujko", "mujhko",
+        "ko", "aur",
+        "bukhar", "khansi", "ulti", "dard", "pet"
+    ]
 
-    # 4. Roman Hindi signals (VERY GENERIC — no language knowledge needed)
-    hindi_signals = ["hai", "aur", "ki", "me", "se"]
+    # count matches
+    score = sum(1 for word in hindi_keywords if word in text_lower)
 
-    # scoring
-    telugu_score = sum(1 for w in telugu_signals if w in text_lower)
-    hindi_score = sum(1 for w in hindi_signals if w in text_lower)
-
-    # IMPORTANT RULE:
-    # If Telugu-style words exist → prefer Telugu
-    if telugu_score > 0:
-        return "te"
-
-    # else if Hindi-style structure → Hindi
-    if hindi_score > 0:
+    # 🔥 KEY RULE: if meaningful Hindi words exist → Hindi
+    if score >= 2:
         return "hi"
 
     return "en"
@@ -50,19 +51,14 @@ def to_english(text):
     if not text:
         return "", "en"
 
-    # already English
     if lang == "en":
         return text, "en"
 
     try:
         translated = GoogleTranslator(source=lang, target='en').translate(text)
 
-        # safety checks (VERY IMPORTANT)
-        if (
-            not translated
-            or len(translated.strip()) < 2
-            or translated.strip().lower() == text.strip().lower()
-        ):
+        # 🔥 BETTER SAFETY CHECK
+        if not translated or translated.strip().lower() == text.strip().lower():
             return text, lang
 
         return translated, lang

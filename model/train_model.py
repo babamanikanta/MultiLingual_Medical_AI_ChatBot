@@ -14,6 +14,14 @@ df = pd.read_csv("../data/training_improved.csv")
 # Clean column names
 df.columns = df.columns.str.strip().str.replace(" ", "_")
 
+severity_df = pd.read_csv("../data/symptom-severity.csv")
+severity_map = dict(zip(severity_df["Symptom"], severity_df["weight"]))
+
+# Apply weights
+for col in df.columns[:-1]:
+    if col in severity_map:
+        df[col] = df[col] * severity_map[col]
+
 # Features & Target
 X = df.iloc[:, :-1]
 y = df.iloc[:, -1]

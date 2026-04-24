@@ -19,6 +19,14 @@ model = joblib.load("model/disease_model.pkl")
 train_df = pd.read_csv("data/training_improved.csv")
 train_df.columns = train_df.columns.str.strip().str.replace(" ", "_")
 
+# ----------------------------
+# Load symptom severity
+# ----------------------------
+severity_df = pd.read_csv("data/symptom-severity.csv")
+severity_df["Symptom"] = severity_df["Symptom"].str.strip()
+
+severity_map = dict(zip(severity_df["Symptom"], severity_df["weight"]))
+
 symptom_columns = train_df.columns[:-1].tolist()
 ALL_DISEASES = set(model.classes_)
 ALL_DISEASES_LOWER = {d.lower() for d in ALL_DISEASES}
@@ -283,7 +291,7 @@ def predict(symptoms_list):
 
     for s in symptoms_list:
         if s in symptom_columns:
-            input_data.loc[0, s] = 1
+            input_data.loc[0, s] = severity_map.get(s, 1)
 
     probs = model.predict_proba(input_data)[0]
     classes = model.classes_
@@ -318,6 +326,14 @@ def predict(symptoms_list):
 def get_doctor_advice(symptoms, predictions):
     s = set(symptoms)
 
+        # ----------------------------
+    # ✅ NEW: Severity-based check
+    # ----------------------------
+    severity_score = sum(severity_map.get(sym, 1) for sym in symptoms)
+
+    if severity_score > 20:
+        return "🚨 Symptoms look serious. Consult doctor immediately."
+    
     if "chest_pain" in s or "breathlessness" in s:
         return "🚨 Seek immediate medical attention."
 
