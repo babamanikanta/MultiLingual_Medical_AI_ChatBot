@@ -414,29 +414,33 @@ def extract_all_symptoms(user_input):
 # ----------------------------
 def run_chatbot(user_input):
 
-    # ✅ STEP 1: Extract symptoms from ORIGINAL text
-    symptoms = normalize_input(user_input)
-
-    # ✅ STEP 2: Translate input
+    # =========================
+    # STEP 1: Detect + Translate
+    # =========================
     translated_text, lang = to_english(user_input)
 
-    if not translated_text or translated_text.strip() == "":
+    if not translated_text:
         translated_text = user_input.lower()
 
-    # ✅ STEP 3: Extract symptoms from translated text ALSO
-    symptoms = list(set(symptoms) | set(normalize_input(translated_text)))
+    print("🌐 Language:", lang)
+    print("📝 English Text:", translated_text)
 
-    print("🧾 Extracted Symptoms:", symptoms)
+    # =========================
+    # STEP 2: Extract Symptoms (ONLY ENGLISH)
+    # =========================
+    symptoms = normalize_input(translated_text)
+
+    print("🧾 Symptoms:", symptoms)
 
     if not symptoms:
         return translate_to_user_lang("Could not understand symptoms.", lang)
 
     if len(symptoms) < 2:
-        return translate_to_user_lang(
-            "Please provide more symptoms.", lang
-        )
+        return translate_to_user_lang("Please provide more symptoms.", lang)
 
-    # ---------------- RULE ENGINE ----------------
+    # =========================
+    # STEP 3: Rule Engine
+    # =========================
     rule = apply_medical_rules(symptoms)
 
     if rule:
@@ -447,42 +451,47 @@ def run_chatbot(user_input):
     if not predictions:
         predictions = [{"disease": "General Viral Infection", "confidence": 40}]
 
+    # =========================
+    # STEP 4: Doctor Advice
+    # =========================
     doctor_advice = get_doctor_advice(symptoms, predictions)
 
-    print("DEBUG:", translated_text, symptoms, predictions)
-
-    # ================= GEMINI (FIXED POSITION) =================
+    # =========================
+    # STEP 5: Gemini Response
+    # =========================
     gemini_text = None
 
     if model_gemini:
         prompt = f"""
-You are a friendly medical assistant.
+You are a medical assistant.
 
-Explain the condition in simple human language in 3-4 lines only.
-Do NOT give long answers.
+Explain the condition in simple 3-4 lines.
 
-User input: {translated_text}
+User: {translated_text}
 Symptoms: {', '.join(symptoms)}
-Possible diseases: {', '.join([p['disease'] for p in predictions])}
+Diseases: {', '.join([p['disease'] for p in predictions])}
 """
+
         try:
-            gemini_response = model_gemini.generate_content(prompt)
-
-            print("GEMINI RAW:", gemini_response)
-
-            if hasattr(gemini_response, "text") and gemini_response.text:
-                gemini_text = gemini_response.text
-            else:
-                gemini_text = gemini_response.candidates[0].content.parts[0].text
-
+            response = model_gemini.generate_content(prompt)
+            gemini_text = response.text if hasattr(response, "text") else None
         except Exception as e:
-            print("❌ Gemini Error:", e)
-            gemini_text = None
+            print("Gemini error:", e)
 
-    print("GEMINI TEXT:", gemini_text)
+    # =========================
+    # STEP 6: Build Structured Response
+    # =========================
+    final_response = build_original_response(
+        predictions,
+        doctor_advice,
+        lang,
+        gemini_text
+    )
 
-    # ================= FINAL RESPONSE =================
-    return build_original_response(predictions, doctor_advice, lang, gemini_text)
+    # =========================
+    # STEP 7: Translate BACK
+    # =========================
+    return translate_to_user_lang(final_response, lang)
 
 
 # ----------------------------

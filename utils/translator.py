@@ -11,33 +11,31 @@ def detect_language_custom(text):
 
     text_lower = text.lower()
 
-    # ----------------------------
-    # 1. Strong script detection
-    # ----------------------------
-    if re.search(r'[\u0C00-\u0C7F]', text_lower):
+    # ================= TELUGU SCRIPT
+    if re.search(r'[\u0C00-\u0C7F]', text):
         return "te"
 
-    if re.search(r'[\u0900-\u097F]', text_lower):
+    # ================= HINDI SCRIPT
+    if re.search(r'[\u0900-\u097F]', text):
         return "hi"
 
-    # ----------------------------
-    # 2. Strong Hinglish detection
-    # ----------------------------
-    hindi_keywords = [
-        "hai", "hun", "ho", "tha", "thi", "the",
-        "mera", "meri", "mere",
-        "dost", "dosth",
-        "mujhe", "mujko", "mujhko",
-        "ko", "aur",
-        "bukhar", "khansi", "ulti", "dard", "pet"
+    # ================= TENGGLISH DETECTION (FIX)
+    telugu_words = [
+        "valla", "ki", "undi", "le", "emi", "maa", "daggu", "jwaram"
     ]
 
-    # count matches
-    score = sum(1 for word in hindi_keywords if word in text_lower)
+    hindi_words = [
+        "hai", "mera", "mujhe", "bukhar", "dard"
+    ]
 
-    # 🔥 KEY RULE: if meaningful Hindi words exist → Hindi
-    if score >= 2:
-        return "hi"
+    t_score = sum(1 for w in telugu_words if w in text_lower)
+    h_score = sum(1 for w in hindi_words if w in text_lower)
+
+    if t_score >= 2:
+        return "tenglish"
+
+    if h_score >= 2:
+        return "hinglish"
 
     return "en"
 
@@ -48,49 +46,36 @@ def detect_language_custom(text):
 def to_english(text):
     lang = detect_language_custom(text)
 
-    if not text:
-        return "", "en"
-
     if lang == "en":
         return text, "en"
 
     try:
-        translated = GoogleTranslator(source=lang, target='en').translate(text)
-
-        # 🔥 BETTER SAFETY CHECK
-        if not translated or translated.strip().lower() == text.strip().lower():
-            return text, lang
-
+        translated = GoogleTranslator(source='auto', target='en').translate(text)
         return translated, lang
-
-    except Exception as e:
-        print("Translation error:", e)
+    except:
         return text, lang
-
 
 # ----------------------------
 # Translate response back (SAFE OUTPUT)
 # ----------------------------
-def translate_to_user_lang(text, target_lang):
+def translate_to_user_lang(text, lang):
 
-    if not text:
-        return ""
-
-    if target_lang == "en":
+    if lang == "en":
         return text
 
     try:
-        translated = GoogleTranslator(
-            source='en',
-            target=target_lang
-        ).translate(text)
 
-        # safety check
-        if not translated or len(translated.strip()) < 2:
-            return text
+        if lang == "te":
+            return GoogleTranslator(source='auto', target='te').translate(text)
 
-        return translated
+        if lang == "tenglish":
+            return GoogleTranslator(source='auto', target='te').translate(text)
 
-    except Exception as e:
-        print("Reverse translation error:", e)
+        if lang == "hi":
+            return GoogleTranslator(source='auto', target='hi').translate(text)
+
+        if lang == "hinglish":
+            return GoogleTranslator(source='auto', target='hi').translate(text)
+
+    except:
         return text

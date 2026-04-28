@@ -1,9 +1,7 @@
 import telebot
 import os
-import time
 from dotenv import load_dotenv
 
-# ✅ UPDATED IMPORTS
 from main import run_chatbot, extract_all_symptoms
 from utils.db import save_user_query
 
@@ -14,31 +12,9 @@ load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 if not TOKEN:
-    raise ValueError("❌ TELEGRAM_BOT_TOKEN not found in .env file")
+    raise ValueError("❌ TELEGRAM_BOT_TOKEN not found")
 
 bot = telebot.TeleBot(TOKEN)
-
-# ----------------------------
-# Small Talk Handler
-# ----------------------------
-def handle_small_talk(text):
-    text = text.lower()
-
-    greetings = ["hi", "hello", "hey", "hii", "namaste"]
-    thanks = ["thanks", "thank you", "thx"]
-
-    if any(word in text for word in greetings):
-        return (
-            "👋 Hello! I'm your AI Health Assistant 🤖\n\n"
-            "Tell me your symptoms like:\n"
-            "• fever and cough\n"
-            "• headache and vomiting\n"
-        )
-
-    if any(word in text for word in thanks):
-        return "😊 You're welcome! Stay healthy."
-
-    return None
 
 
 # ----------------------------
@@ -48,104 +24,77 @@ def handle_small_talk(text):
 def start(message):
     bot.send_message(
         message.chat.id,
-        f"""👋 Hello {message.from_user.first_name}!
-
-🧠 I'm your AI Health Assistant 🤖
-
-I understand:
-🌍 English | Hindi | Telugu | Hinglish
-
-💬 Try:
-• fever and headache
-• bukhar aur khansi
-• jwaram and tala noppi
-
-⚠️ Disclaimer:
-This is an AI assistant, not a medical doctor.
-Always consult a healthcare professional for serious conditions.
-"""
+        "👋 Hello! I'm your AI Health Assistant 🤖\n\n"
+        "Just type your symptoms:\n"
+        "• fever and cough\n"
+        "• jwaram and talanoppi\n"
+        "• bukhar aur khansi"
     )
 
 
 # ----------------------------
-# Handle Messages
+# MAIN HANDLER
 # ----------------------------
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
 
     user_input = message.text.strip()
-    user_id = message.from_user.id
-    user_name = message.from_user.username or "NoUsername"
-    full_name = message.from_user.first_name or "Unknown"
 
     if not user_input:
-        bot.send_message(message.chat.id, "❌ Please enter valid symptoms.")
+        bot.send_message(message.chat.id, "❌ Please enter symptoms.")
         return
 
+    user_id = message.from_user.id
+    username = message.from_user.username or "NoUsername"
+    full_name = message.from_user.first_name or "Unknown"
+
     try:
-        # ----------------------------
-        # Small Talk First
-        # ----------------------------
-        small_talk = handle_small_talk(user_input)
-        if small_talk:
-            bot.send_message(message.chat.id, small_talk)
-            return
+        print("\n==============================")
+        print("📩 INPUT:", user_input)
 
         # ----------------------------
-        # Typing effect
-        # ----------------------------
-        bot.send_chat_action(message.chat.id, "typing")
-        time.sleep(0.7)
-
-        # ----------------------------
-        # AI response (CORRECT PIPELINE)
+        # STEP 1: AI PIPELINE (MAIN LOGIC)
         # ----------------------------
         response = run_chatbot(user_input)
 
         if not response:
-            response = (
-                "😕 I couldn't understand your symptoms.\n\n"
-                "Try like:\n"
-                "• fever and cough\n"
-                "• headache and vomiting"
-            )
+            response = "😕 Unable to process symptoms. Try again."
+
+        print("📤 RESPONSE GENERATED")
 
         # ----------------------------
-        # Add Disclaimer
+        # STEP 2: Send response immediately
         # ----------------------------
-        response += (
-            "\n\n⚠️ Note:\n"
-            "This is AI-generated advice and not a medical diagnosis.\n"
-            "Please consult a doctor if symptoms persist."
-        )
+        bot.send_chat_action(message.chat.id, "typing")
+        bot.send_message(message.chat.id, response)
 
         # ----------------------------
-        # ✅ FIXED SYMPTOM EXTRACTION
+        # STEP 3: Extract symptoms (after response)
         # ----------------------------
         symptoms = extract_all_symptoms(user_input)
 
-        # Debug (optional)
-        print("INPUT:", user_input)
-        print("SYMPTOMS:", symptoms)
+        print("🧾 SYMPTOMS:", symptoms)
 
         # ----------------------------
-        # Save to DB
+        # STEP 4: Save to DB safely
         # ----------------------------
-        save_user_query(
-            user_id=user_id,
-            username=user_name,
-            full_name=full_name,
-            symptoms=symptoms,
-            response=response
-        )
+        try:
+            save_user_query(
+                user_id=user_id,
+                username=username,
+                full_name=full_name,
+                symptoms=symptoms,
+                response=response
+            )
+            print("💾 DB SAVED SUCCESSFULLY")
 
-        # ----------------------------
-        # Send response
-        # ----------------------------
-        bot.send_message(message.chat.id, response)
+        except Exception as db_error:
+            print("❌ DB ERROR (ignored):", db_error)
+
+        print("==============================\n")
 
     except Exception as e:
-        print("Bot Error:", e)
+        print("❌ BOT ERROR:", e)
 
         bot.send_message(
             message.chat.id,
@@ -154,7 +103,7 @@ def handle_message(message):
 
 
 # ----------------------------
-# Run Bot
+# RUN BOT
 # ----------------------------
 print("🤖 Telegram Bot Running...")
-bot.infinity_polling(timeout=10, long_polling_timeout=5)
+bot.infinity_polling(skip_pending=True)
